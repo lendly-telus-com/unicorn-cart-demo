@@ -1,0 +1,14 @@
+{
+  "name": "sheetsdemo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Lendly",
+  "license": "ISC",
+  "dependencies": {
+    "google-spreadsheet": "^2.0.6"
+  }
+}
