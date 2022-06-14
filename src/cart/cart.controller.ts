@@ -8,6 +8,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { CartDto } from '../dto/cart.dto';
+import { ShippingDto } from '../dto/shipping.dto';
 import { CartService } from './cart.service';
 
 @Controller('cart')
@@ -21,11 +22,6 @@ export class CartController {
     } else {
       return await this.service.save(newCart);
     }
-  }
-
-  @Post('/shipping/:id')
-  create(): string {
-    return 'This action shipping!!!!!! a new cart';
   }
 
   @Get(':id')
@@ -57,8 +53,22 @@ export class CartController {
     return await this.service.createCart(id, sku, qty);
   }
 
-  @Get('/update/cart-id/sku/qty')
-  updateCart(@Param() params): string {
-    return `This action updateCart!!!!!!!!!!!!! cart`;
+  // update quantity - remove item when qty == 0
+  // qty needs to be validated/ bypass old implementation
+  @Get('/update/:id/:sku/:qty')
+  async updateCart(
+    @Param('id') id: String,
+    @Param('sku') sku: String,
+    @Param('qty') qty: number,
+  ) {
+  
+    return await this.service.updateCart(id, sku, qty);
+  }
+
+
+  // add shipping
+  @Post('/shipping/:id')
+  async createShipping(@Param('id') id: String,@Body() shipping: ShippingDto ) {   
+    return await this.service.createShipping(id,shipping)
   }
 }

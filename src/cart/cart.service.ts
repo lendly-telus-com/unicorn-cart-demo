@@ -5,11 +5,13 @@ import {
 } from '@nestjs/common';
 import { createClient } from 'redis';
 import { CartDto } from '../dto/cart.dto';
+import { ShippingDto } from '../dto/shipping.dto';
 
 const client = createClient();
 
 @Injectable()
 export class CartService {
+ 
   async save(newCart: CartDto): Promise<CartDto> {
     await client.connect();
     await client.setEx(newCart.id, 3600, JSON.stringify(newCart));
@@ -91,6 +93,82 @@ export class CartService {
     await client.setEx(id, 3600, JSON.stringify(cart));
     return cart;
   }
+
+  // update quantity - remove item when qty == 0
+  async updateCart(id: any, sku: String, qty: number) {
+    let cart;
+    // call redis--sku
+    const result = await client.get(id);
+  
+    if (result === null) {
+      throw new NotFoundException('cart not found');
+    }
+    cart = JSON.parse(result)
+ 
+    // remove item with 0 qty
+    const itemWithMatchingSkuUpdateQty = [];
+    const itemsWithGoodQty = [];
+    for (const i of cart.items) {
+      if (i.qty > 0) {
+        itemsWithGoodQty.push(i);
+      }
+    }
+    // update qty if match to sku
+    for (const i of itemsWithGoodQty) {
+      if (i.sku === sku) {     
+        const item = {
+          qty: qty,
+          sku: sku,
+          name: i.name,
+          price: i.price,
+          subtotal: qty * i.price,
+        };
+        itemWithMatchingSkuUpdateQty.push(item);
+      } else {
+        itemWithMatchingSkuUpdateQty.push(i);
+      }
+    }
+    cart.items = itemWithMatchingSkuUpdateQty;
+    cart.total = this.calcTotal(cart.items);   
+    cart.tax = this.calcTax(cart.total);
+    await client.setEx(id, 3600, JSON.stringify(cart));
+    return cart;
+  }
+
+
+  async createShipping(id: any, shipping: ShippingDto ) {   
+    let cart;
+   // call redis--sku
+   const result = await client.get(id);
+   if(result === null){
+    throw new NotFoundException('cart not found')
+   }
+   cart = JSON.parse(result)
+   const isShip=[]
+   const item = {
+    qty: 1,
+    sku: 'SHIP',
+    name: 'shipping to ' + shipping.location,
+    price: shipping.cost,
+    subtotal: shipping.cost,
+   }
+    // check shipping already in the cart if not set item Ship
+   for(const i of cart.items){
+    if(i.sku === item.sku){
+     console.log('item was already shipped')
+     isShip.push(i)
+    }else{
+        isShip.push(item) 
+
+    }
+   } 
+   cart.items = isShip
+   cart.total = this.calcTotal(cart.items);   
+   cart.tax = this.calcTax(cart.total);
+   await client.setEx(id, 3600, JSON.stringify(cart));
+   return cart;
+
+}
 
   mergeList(
     list: any[],
