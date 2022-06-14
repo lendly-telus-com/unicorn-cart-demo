@@ -1,19 +1,11 @@
+import { Items } from './items';
+
 export interface Cart {
   id?: string;
 
-  unit?: string;
+  total?: number;
 
-  dateFrom?: Date;
+  tax?: number;
 
-  dateTo?: Date;
-
-  sku?: string;
-
-  name?: string;
-
-  quantity?: number;
-
-  price?: number;
-
-  subtotal?: number;
+  items?: Array<Items>;
 }

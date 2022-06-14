@@ -6,21 +6,20 @@ import {
 import { createClient } from 'redis';
 import { CartDto } from '../dto/cart.dto';
 import { ShippingDto } from '../dto/shipping.dto';
+import { Items } from '../model/items';
 
 const client = createClient();
 
 @Injectable()
 export class CartService {
- 
   async save(newCart: CartDto): Promise<CartDto> {
     await client.connect();
     await client.setEx(newCart.id, 3600, JSON.stringify(newCart));
-
     //await client.disconnect()
     return newCart;
   }
 
-  async findOne(id: string) {
+  async findOne(id: string): Promise<CartDto> {
     const result = await client.get(id);
     if (result === null) {
       throw new NotFoundException(`Cart with id ${id} could not be found`);
@@ -28,7 +27,7 @@ export class CartService {
     return JSON.parse(result);
   }
 
-  async deleteCartById(id: any) {
+  async deleteCartById(id: string): Promise<any> {
     try {
       const result = await client.del(id);
       if (result === 0) {
@@ -42,20 +41,25 @@ export class CartService {
     }
   }
 
-  async updateCardId(oldId: any, newId: any): Promise<string> {
+  // rename cart id from old to new 
+  async updateCardId(oldId: string, newId: string): Promise<CartDto> {
     const result = await client.get(oldId);
-
     if (result === null) {
       throw new NotFoundException('Cart not found');
     }
-    return client.rename(oldId, newId);
+    client.rename(oldId, newId);
+    const changeId =  await client.get(newId);
+    const parseChangeId = JSON.parse(changeId)
+    parseChangeId.id = newId; 
+    await client.setEx(newId, 3600, JSON.stringify(parseChangeId));    
+    return parseChangeId;
   }
 
   // update/create cart
-  async createCart(id: any, sku: String, qty: number) {
+  async createCart(id: any, sku: String, qty: number): Promise<CartDto> {
     //todo calling Product catalog
     const product = {
-      sku: 'sku234',
+      sku: 'sku123',
       inStock: 550,
       name: 'Susuki',
       price: 200,
@@ -65,7 +69,7 @@ export class CartService {
     }
     // call redis--
     const result = await client.get(id);
-    let cart;
+    let cart: CartDto;
     if (result === null) {
       cart = {
         total: 0,
@@ -95,16 +99,16 @@ export class CartService {
   }
 
   // update quantity - remove item when qty == 0
-  async updateCart(id: any, sku: String, qty: number) {
-    let cart;
+  async updateCart(id: any, sku: String, qty: number): Promise<CartDto> {
+    let cart: CartDto;
     // call redis--sku
     const result = await client.get(id);
-  
+
     if (result === null) {
       throw new NotFoundException('cart not found');
     }
-    cart = JSON.parse(result)
- 
+    cart = JSON.parse(result);
+
     // remove item with 0 qty
     const itemWithMatchingSkuUpdateQty = [];
     const itemsWithGoodQty = [];
@@ -115,7 +119,7 @@ export class CartService {
     }
     // update qty if match to sku
     for (const i of itemsWithGoodQty) {
-      if (i.sku === sku) {     
+      if (i.sku === sku) {
         const item = {
           qty: qty,
           sku: sku,
@@ -129,49 +133,46 @@ export class CartService {
       }
     }
     cart.items = itemWithMatchingSkuUpdateQty;
-    cart.total = this.calcTotal(cart.items);   
+    cart.total = this.calcTotal(cart.items);
     cart.tax = this.calcTax(cart.total);
     await client.setEx(id, 3600, JSON.stringify(cart));
     return cart;
   }
 
-
-  async createShipping(id: any, shipping: ShippingDto ) {   
-    let cart;
-   // call redis--sku
-   const result = await client.get(id);
-   if(result === null){
-    throw new NotFoundException('cart not found')
-   }
-   cart = JSON.parse(result)
-   const isShip=[]
-   const item = {
-    qty: 1,
-    sku: 'SHIP',
-    name: 'shipping to ' + shipping.location,
-    price: shipping.cost,
-    subtotal: shipping.cost,
-   }
-    // check shipping already in the cart if not set item Ship
-   for(const i of cart.items){
-    if(i.sku === item.sku){
-     console.log('item was already shipped')
-     isShip.push(i)
-    }else{
-        isShip.push(item) 
-
+  async createShipping(id: any, shipping: ShippingDto): Promise<CartDto> {
+    let cart: CartDto;
+    // call redis--sku
+    const result = await client.get(id);
+    if (result === null) {
+      throw new NotFoundException('cart not found');
     }
-   } 
-   cart.items = isShip
-   cart.total = this.calcTotal(cart.items);   
-   cart.tax = this.calcTax(cart.total);
-   await client.setEx(id, 3600, JSON.stringify(cart));
-   return cart;
-
-}
+    cart = JSON.parse(result);
+    const isShip = [];
+    const item = {
+      qty: 1,
+      sku: 'SHIP',
+      name: 'shipping to ' + shipping.location,
+      price: shipping.cost,
+      subtotal: shipping.cost,
+    };
+    // check shipping already in the cart if not set item Ship
+    for (const i of cart.items) {
+      if (i.sku === item.sku) {
+        console.log('item was already shipped');
+        isShip.push(i);
+      } else {
+        isShip.push(item);
+      }
+    }
+    cart.items = isShip;
+    cart.total = this.calcTotal(cart.items);
+    cart.tax = this.calcTax(cart.total);
+    await client.setEx(id, 3600, JSON.stringify(cart));
+    return cart;
+  }
 
   mergeList(
-    list: any[],
+    list: Items[],
     product: {
       qty?: number;
       sku: any;
@@ -185,8 +186,7 @@ export class CartService {
     const isProductMerge = [];
     for (const i of list) {
       if (i.sku === product.sku) {
-        const qtyNumber = +i.qty + +qty;
-        console.log(qtyNumber);
+        const qtyNumber = + i.qty + + qty;        
         const item = {
           qty: qtyNumber,
           sku: product.sku,

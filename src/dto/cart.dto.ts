@@ -1,21 +1,12 @@
 import { Cart } from '../model/cart';
+import { Items } from '../model/items';
 
 export class CartDto implements Cart {
   id?: string;
 
-  unit?: string;
+  total?: number;
 
-  dateFrom?: Date;
+  tax?: number;
 
-  dateTo?: Date;
-
-  sku?: string;
-
-  name?: string;
-
-  quantity?: number;
-
-  price?: number;
-
-  subtotal?: number;
+  items?: Array<Items>;
 }

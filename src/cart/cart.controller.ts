@@ -25,20 +25,21 @@ export class CartController {
   }
 
   @Get(':id')
-  async findOne(@Param() params): Promise<string> {
-    return await this.service.findOne(params.id);
+  async findOne(@Param('id') id: string): Promise<CartDto> {
+    return await this.service.findOne(id);
   }
+
   @Delete(':id')
-  async deleteCartById(@Param() params) {
-    return await this.service.deleteCartById(params.id);
+  async deleteCartById(@Param('id') id: string): Promise<any> {
+    return await this.service.deleteCartById(id);
   }
 
   // rename cart id from to to
   @Get('/rename/:oldId/:newId')
   async updateCardId(
-    @Param('oldId') oldId: String,
-    @Param('newId') newId: String,
-  ): Promise<string> {
+    @Param('oldId') oldId: string,
+    @Param('newId') newId: string,
+  ): Promise<CartDto> {
     return await this.service.updateCardId(oldId, newId);
   }
 
@@ -46,10 +47,10 @@ export class CartController {
   // qty needs to be validated/ bypass old implementation
   @Get('/add/:id/:sku/:qty')
   async createCart(
-    @Param('id') id: String,
-    @Param('sku') sku: String,
+    @Param('id') id: string,
+    @Param('sku') sku: string,
     @Param('qty') qty: number,
-  ) {
+  ): Promise<CartDto> {
     return await this.service.createCart(id, sku, qty);
   }
 
@@ -60,15 +61,16 @@ export class CartController {
     @Param('id') id: String,
     @Param('sku') sku: String,
     @Param('qty') qty: number,
-  ) {
-  
+  ): Promise<CartDto> {
     return await this.service.updateCart(id, sku, qty);
   }
 
-
   // add shipping
   @Post('/shipping/:id')
-  async createShipping(@Param('id') id: String,@Body() shipping: ShippingDto ) {   
-    return await this.service.createShipping(id,shipping)
+  async createShipping(
+    @Param('id') id: String,
+    @Body() shipping: ShippingDto,
+  ): Promise<CartDto> {
+    return await this.service.createShipping(id, shipping);
   }
 }

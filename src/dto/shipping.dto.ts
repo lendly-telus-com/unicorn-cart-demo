@@ -1,5 +1,5 @@
-export class ShippingDto{
-    cost?: number;
+export class ShippingDto {
+  cost?: number;
 
   distance?: number;
 
