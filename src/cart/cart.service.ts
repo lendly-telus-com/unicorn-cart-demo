@@ -3,24 +3,34 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { createClient } from 'redis';
+import { RedisConfig } from '../config/redis.config';
 import { CartDto } from '../dto/cart.dto';
 import { ShippingDto } from '../dto/shipping.dto';
+import { UpdateDto } from '../dto/update.dto';
+import { Cart } from '../model/cart';
 import { Items } from '../model/items';
 
-const client = createClient();
+const client = new RedisConfig();
+client.clientOn();
 
 @Injectable()
 export class CartService {
+  constructor(private readonly redis: RedisConfig) {}
+
   async save(newCart: CartDto): Promise<CartDto> {
-    await client.connect();
-    await client.setEx(newCart.id, 3600, JSON.stringify(newCart));
-    //await client.disconnect()
+    const result = await this.redis.clientSave(
+      newCart.id,
+      3600,
+      JSON.stringify(newCart),
+    );
+    if (!result) {
+      throw new BadRequestException('something went wrong');
+    }
     return newCart;
   }
 
   async findOne(id: string): Promise<CartDto> {
-    const result = await client.get(id);
+    const result = await this.redis.clientGet(id);
     if (result === null) {
       throw new NotFoundException(`Cart with id ${id} could not be found`);
     }
@@ -29,7 +39,7 @@ export class CartService {
 
   async deleteCartById(id: string): Promise<any> {
     try {
-      const result = await client.del(id);
+      const result = await this.redis.clientDelete(id);
       if (result === 0) {
         return new NotFoundException(`Cart with id ${id} could not be found`);
       }
@@ -41,22 +51,24 @@ export class CartService {
     }
   }
 
-  // rename cart id from old to new 
+  // rename cart id from old to new
   async updateCardId(oldId: string, newId: string): Promise<CartDto> {
-    const result = await client.get(oldId);
+    const result = await this.redis.clientGet(oldId);
     if (result === null) {
       throw new NotFoundException('Cart not found');
     }
-    client.rename(oldId, newId);
-    const changeId =  await client.get(newId);
-    const parseChangeId = JSON.parse(changeId)
-    parseChangeId.id = newId; 
-    await client.setEx(newId, 3600, JSON.stringify(parseChangeId));    
+    await this.redis.clientRenameKey(oldId, newId);
+    const changeId = await this.redis.clientGet(newId);
+    const parseChangeId = JSON.parse(changeId);
+    parseChangeId.id = newId;
+    await this.redis.clientSave(newId, 3600, JSON.stringify(parseChangeId));
     return parseChangeId;
   }
 
   // update/create cart
-  async createCart(id: any, sku: String, qty: number): Promise<CartDto> {
+  async updateCart(updateDto: UpdateDto): Promise<Cart> {
+    const { id, sku, qty } = updateDto;
+
     //todo calling Product catalog
     const product = {
       sku: 'sku123',
@@ -68,8 +80,8 @@ export class CartService {
       throw new NotFoundException('Out of stock');
     }
     // call redis--
-    const result = await client.get(id);
-    let cart: CartDto;
+    const result = await this.redis.clientGet(id);
+    let cart: Cart;
     if (result === null) {
       cart = {
         total: 0,
@@ -94,15 +106,16 @@ export class CartService {
 
     // work out tax
     cart.tax = this.calcTax(cart.total);
-    await client.setEx(id, 3600, JSON.stringify(cart));
+    await this.redis.clientSave(id, 3600, JSON.stringify(cart));
     return cart;
   }
 
   // update quantity - remove item when qty == 0
-  async updateCart(id: any, sku: String, qty: number): Promise<CartDto> {
-    let cart: CartDto;
+  async validateCart(updateDto: UpdateDto): Promise<Cart> {
+    const { id, sku, qty } = updateDto;
+    let cart: Cart;
     // call redis--sku
-    const result = await client.get(id);
+    const result = await this.redis.clientGet(id);
 
     if (result === null) {
       throw new NotFoundException('cart not found');
@@ -135,14 +148,14 @@ export class CartService {
     cart.items = itemWithMatchingSkuUpdateQty;
     cart.total = this.calcTotal(cart.items);
     cart.tax = this.calcTax(cart.total);
-    await client.setEx(id, 3600, JSON.stringify(cart));
+    await this.redis.clientSave(id, 3600, JSON.stringify(cart));
     return cart;
   }
 
   async createShipping(id: any, shipping: ShippingDto): Promise<CartDto> {
     let cart: CartDto;
     // call redis--sku
-    const result = await client.get(id);
+    const result = await this.redis.clientGet(id);
     if (result === null) {
       throw new NotFoundException('cart not found');
     }
@@ -167,7 +180,7 @@ export class CartService {
     cart.items = isShip;
     cart.total = this.calcTotal(cart.items);
     cart.tax = this.calcTax(cart.total);
-    await client.setEx(id, 3600, JSON.stringify(cart));
+    await this.redis.clientSave(id, 3600, JSON.stringify(cart));
     return cart;
   }
 
@@ -186,7 +199,7 @@ export class CartService {
     const isProductMerge = [];
     for (const i of list) {
       if (i.sku === product.sku) {
-        const qtyNumber = + i.qty + + qty;        
+        const qtyNumber = +i.qty + +qty;
         const item = {
           qty: qtyNumber,
           sku: product.sku,
